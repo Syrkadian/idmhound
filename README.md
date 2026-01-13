@@ -117,6 +117,13 @@ RETURN p
 LIMIT 1000
 ```
 
+*List users who can read or write Keytab*
+```
+MATCH p=(s:User)-[:MemberOf*0..]->(g)-[:GetKeytab|SetKeytab]->(t)
+RETURN p
+LIMIT 1000
+```
+
 ## Limitations
 
 * Search and pathfinding are not yet supported by BloodHound when parsing files in the Opengraph format[^1].

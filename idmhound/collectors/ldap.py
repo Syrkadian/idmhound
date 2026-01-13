@@ -44,7 +44,7 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
     :return: tuple of domains, users, groups, computers, hbac and membership."""
 
     ldap_realm = "".join([",dc=" + dc for dc in realm.split(".")])
-    domains, users, groups, computers, hbac, sudoer, membership, spns, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds = [], [], [], [], [], [], [], [], [], [], [], []
+    domains, users, groups, computers, hbac, sudoer, membership, spns, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds, iparights = [], [], [], [], [], [], [], [], [], [], [], [], []
     for index, entry in enumerate(raw):
         dn = entry.entry_dn
         realm_object = None
@@ -64,8 +64,9 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
         elif re.match(f"fqdn=.+,cn=computers,cn=accounts{ldap_realm}", dn) and all(
                 attr in entry.entry_attributes_as_dict.keys() for attr in
                 ["cn", "ipaUniqueID", "krbCanonicalName", "krbPrincipalName", "fqdn"]):
-            computers.append(Computer(dn, entry["cn"], entry["ipaUniqueID"], entry["krbCanonicalName"],
-                                    entry["krbPrincipalName"], entry["fqdn"], sid))
+            realm_object = Computer(dn, entry["cn"], entry["ipaUniqueID"], entry["krbCanonicalName"],
+                                    entry["krbPrincipalName"], entry["fqdn"], sid)
+            computers.append(realm_object)
         elif re.match(f"ipaUniqueID=.+,cn=hbac{ldap_realm}", dn) and all(
                 attr in entry.entry_attributes_as_dict.keys() for attr in ["ipaUniqueID", "ipaEnabledFlag"]) and str(
                 entry["ipaEnabledFlag"]) == "True":
@@ -77,7 +78,8 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
             members, hosts, commands, asusers, ipaid = parse_sudoer(entry)
             sudoer.append(Sudoer(members, hosts, commands, asusers, ipaid))
         elif re.match(f"krbprincipalname=.+,cn=services,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["krbPrincipalName", "managedBy"]):
-            spns.append((entry["krbPrincipalName"], entry["managedBy"]))
+            realm_object = (entry["krbPrincipalName"], entry["managedBy"])
+            spns.append(realm_object)
         elif re.match(f"cn=.+,cn=hbacservicegroups,cn=hbac{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["cn", "ipaUniqueID", "member"]):
             hbacservicesgroups.append(HBACServicesGroup(dn, entry["cn"], entry["ipaUniqueID"], entry["member"], sid))
         elif re.match(f"cn=.+,cn=hbacservices,cn=hbac{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["cn", "ipaUniqueID"]):
@@ -92,7 +94,10 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
                 realm_object.set_desc(entry["description"])
             if all(attr not in entry.entry_attributes_as_dict.keys() for attr in ["krbLastPwdChange", "krbPasswordExpiration"]):
                 realm_object.enabled = False
-
+            if "ipaAllowedToPerform;read_keys" in entry.entry_attributes_as_dict.keys():
+                iparights.append(IpaRight(list(entry["ipaAllowedToPerform;read_keys"]),[entry.entry_dn], ["GetKeytab"]))
+            if "ipaAllowedToPerform;write_keys" in entry.entry_attributes_as_dict.keys():
+                iparights.append(IpaRight(list(entry["ipaAllowedToPerform;write_keys"]),[entry.entry_dn], ["SetKeytab"]))
 
     for spn in spns:
         for computer in computers:
@@ -106,7 +111,7 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
     logger.info(f"Found {len(hbac)} HBAC.")
     logger.info(f"Found {len(sudoer)} sudoers")
 
-    return domains, users, groups, computers, hbac, sudoer, membership, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds
+    return domains, users, groups, computers, hbac, sudoer, membership, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds, iparights
 
 
 def legacy_parse(raw, realm, sid) -> tuple:
