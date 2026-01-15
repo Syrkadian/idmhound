@@ -128,6 +128,29 @@ class Computer(Node):
         self.hasspn = True
         self.spn.append(str(spn))
 
+class Service(Node):
+    """Represent a service."""
+
+    def __init__(self, dn: str, cn: str, ipaUniqueID: str, krbPrincipalName: str, domainsid: str):
+
+        super().__init__(dn, cn, ipaUniqueID, domainsid)
+
+        self.krbPrincipalName = str(krbPrincipalName)
+        self.hasspn = True
+
+    def to_json(self) -> dict:
+        """Convert a service as a dictionary (JSON) representation.
+        :return: edges as a list of dictionary."""
+
+        return {"id": self.ipaUniqueID,
+                "properties": {"distinguishedname": self.dn,
+                               "name": self.krbPrincipalName,
+                               "description": self.desc,
+                               "domainsid": self.domainsid,
+                               "hasspn": self.hasspn},
+                "kinds": ["User"]}
+
+
 
 class Group(Node):
     """Represent a group."""

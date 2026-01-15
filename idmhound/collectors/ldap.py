@@ -77,8 +77,8 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
                 entry["ipaEnabledFlag"]) == "True":
             members, hosts, commands, asusers, ipaid = parse_sudoer(entry)
             sudoer.append(Sudoer(members, hosts, commands, asusers, ipaid))
-        elif re.match(f"krbprincipalname=.+,cn=services,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["krbPrincipalName", "managedBy"]):
-            realm_object = (entry["krbPrincipalName"], entry["managedBy"])
+        elif re.match(f"krbprincipalname=.+,cn=services,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["krbCanonicalName", "ipaUniqueID", "krbPrincipalName"]):
+            realm_object = Service(dn, entry["krbCanonicalName"],  entry["ipaUniqueID"], entry["krbPrincipalName"], sid)
             spns.append(realm_object)
         elif re.match(f"cn=.+,cn=hbacservicegroups,cn=hbac{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["cn", "ipaUniqueID", "member"]):
             hbacservicesgroups.append(HBACServicesGroup(dn, entry["cn"], entry["ipaUniqueID"], entry["member"], sid))
@@ -99,11 +99,6 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
             if "ipaAllowedToPerform;write_keys" in entry.entry_attributes_as_dict.keys():
                 iparights.append(IpaRight(list(entry["ipaAllowedToPerform;write_keys"]),[entry.entry_dn], ["SetKeytab"]))
 
-    for spn in spns:
-        for computer in computers:
-            if spn[1] == computer.get_dn():
-                computer.set_spn(spn[0])
-
     logger.info(f"Found {len(domains)} domains.")
     logger.info(f"Found {len(users)} users.")
     logger.info(f"Found {len(groups)} groups.")
@@ -111,7 +106,7 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
     logger.info(f"Found {len(hbac)} HBAC.")
     logger.info(f"Found {len(sudoer)} sudoers")
 
-    return domains, users, groups, computers, hbac, sudoer, membership, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds, iparights
+    return domains, users, spns, groups, computers, hbac, sudoer, membership, hbacservicesgroups, hbacservices, sudocmdgroups, sudocmds, iparights
 
 
 def legacy_parse(raw, realm, sid) -> tuple:
