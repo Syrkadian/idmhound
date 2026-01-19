@@ -87,7 +87,7 @@ LIMIT 1000
 
 *List users and groups with sudoer rights*
 ```
-MATCH p=(s)-[e]->(t)
+MATCH p=(s:User)-[:MemberOf*0..]->(g)-[e]->(t)
 WHERE type(e) CONTAINS 'Sudoer'
 RETURN p
 LIMIT 1000
