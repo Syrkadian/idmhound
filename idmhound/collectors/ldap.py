@@ -11,6 +11,12 @@ from ldap3 import Server, Connection, ALL, SUBTREE, SASL, GSSAPI
 
 logger = logging.getLogger()
 
+
+def _get(entry, key, default=""):
+    """Safely retrieve an LDAP attribute, returning default if not present."""
+    return entry[key] if key in entry.entry_attributes_as_dict else default
+
+
 def collect(server: str, base: str, username: str = "", password: str = "", krb_auth: bool = False) -> list:
     """Collect data by performing an LDAP query.
     :param server: server to connect to.
@@ -52,9 +58,15 @@ def parse(raw: list, realm: str, sid: str) -> tuple:
             realm_object = Domain(dn, entry["cn"], entry["ipaNTDomainGUID"], entry["ipaNTFlatName"], sid)
             domains.append(realm_object)
         elif re.match(f"uid=.+,cn=users,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["ipaUniqueID"]):
-            realm_object = User(dn, entry["uid"], entry["gecos"], entry["homeDirectory"], entry["ipaUniqueID"],
-                                entry["krbCanonicalName"], entry["krbPrincipalName"], entry["loginShell"],
-                                entry["sn"], entry["uid"], entry["uidNumber"], sid)
+            realm_object = User(dn, entry["uid"],
+                                _get(entry, "gecos"),
+                                _get(entry, "homeDirectory"),
+                                entry["ipaUniqueID"],
+                                _get(entry, "krbCanonicalName"),
+                                _get(entry, "krbPrincipalName"),
+                                _get(entry, "loginShell"),
+                                _get(entry, "sn"),
+                                entry["uid"], entry["uidNumber"], sid)
             users.append(realm_object)
         elif re.match(f"cn=.+,cn=(hostgroups|groups),cn=accounts{ldap_realm}", dn) and all(
                 attr in entry.entry_attributes_as_dict.keys() for attr in ["cn", "ipaUniqueID", "member"]):
@@ -123,14 +135,23 @@ def legacy_parse(raw, realm, sid) -> tuple:
         dn = entry.entry_dn
         realm_object = None
         if re.match(f"cn=.+,cn=ad,cn=etc{ldap_realm}", dn):
-            realm_object = LegacyDomain(dn, entry["cn"], entry["ipaNTDomainGUID"], entry["ipaNTFlatName"],
-                                        entry["ipaNTSecurityIdentifier"], sid)
+            realm_object = LegacyDomain(dn, entry["cn"],
+                                        _get(entry, "ipaNTDomainGUID"),
+                                        _get(entry, "ipaNTFlatName"),
+                                        _get(entry, "ipaNTSecurityIdentifier"),
+                                        sid)
             domains.append(realm_object)
         elif re.match(f"uid=.+,cn=users,cn=accounts{ldap_realm}", dn):
-            realm_object = LegacyUser(dn, entry["uid"], entry["gecos"], entry["homeDirectory"], entry["ipaUniqueID"],
-                                      entry["ipaNTSecurityIdentifier"], entry["krbCanonicalName"],
-                                      entry["krbPrincipalName"],
-                                      entry["loginShell"], entry["sn"], entry["uid"], entry["uidNumber"], sid)
+            realm_object = LegacyUser(dn, entry["uid"],
+                                      _get(entry, "gecos"),
+                                      _get(entry, "homeDirectory"),
+                                      _get(entry, "ipaUniqueID"),
+                                      _get(entry, "ipaNTSecurityIdentifier"),
+                                      _get(entry, "krbCanonicalName"),
+                                      _get(entry, "krbPrincipalName"),
+                                      _get(entry, "loginShell"),
+                                      _get(entry, "sn"),
+                                      entry["uid"], entry["uidNumber"], sid)
             users.append(realm_object)
         elif re.match(f"cn=.+,cn=groups,cn=accounts{ldap_realm}", dn) and all(
                 attr in entry.entry_attributes_as_dict.keys() for attr in
@@ -159,8 +180,8 @@ def legacy_parse(raw, realm, sid) -> tuple:
                 entry["ipaEnabledFlag"]) == "True":
             members, hosts, commands, asusers, ipaid = parse_sudoer(entry)
             sudoer.append(Sudoer(members, hosts, commands, asusers, ipaid))
-        elif re.match(f"krbprincipalname=.+,cn=services,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["krbPrincipalName", "ipaUniqueID", "krbPrincipalName"]):
-            realm_object = LegacyService(dn, entry["krbCanonicalName"], entry["ipaUniqueID"], sid + "-" + str(num_objects + index), entry["krbPrincipalName"], sid)
+        elif re.match(f"krbprincipalname=.+,cn=services,cn=accounts{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["krbCanonicalName", "ipaUniqueID", "krbPrincipalName"]):
+            realm_object = LegacyService(dn, _get(entry, "krbCanonicalName"), entry["ipaUniqueID"], sid + "-" + str(num_objects + index), entry["krbPrincipalName"], sid)
             spns.append(realm_object)
         elif re.match(f"cn=.+,cn=hbacservicegroups,cn=hbac{ldap_realm}", dn) and all(attr in entry.entry_attributes_as_dict.keys() for attr in ["cn", "ipaUniqueID", "member"]):
             hbacservicesgroups.append(HBACServicesGroup(dn, entry["cn"], entry["ipaUniqueID"], entry["member"], sid))
@@ -197,16 +218,22 @@ def parse_hbac(entry: ldap3.abstract.entry.Entry) -> tuple:
 
     if "userCategory" in entry.entry_attributes_as_dict.keys():
         members = list(entry["userCategory"])
-    else:
+    elif "memberUser" in entry.entry_attributes_as_dict.keys():
         members = list(entry["memberUser"])
+    else:
+        members = []
     if "hostCategory" in entry.entry_attributes_as_dict.keys():
         hosts = list(entry["hostCategory"])
-    else:
+    elif "memberHost" in entry.entry_attributes_as_dict.keys():
         hosts = list(entry["memberHost"])
+    else:
+        hosts = []
     if "serviceCategory" in entry.entry_attributes_as_dict.keys():
         services = list(entry["serviceCategory"])
-    else:
+    elif "memberService" in entry.entry_attributes_as_dict.keys():
         services = list(entry["memberService"])
+    else:
+        services = []
 
     return members, hosts, services, entry["ipaUniqueID"]
 
