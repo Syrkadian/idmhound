@@ -32,11 +32,15 @@ By default, the results are saved in a JSON file in the Opengraph format.
 idmhound -dc <SERVER> -u <USERNAME> -p <PASSWORD> -d <REALM>
 ```
 
+This produces a single combined JSON file.
+
 Alternatively the legacy Bloodhound file format (or a mix of both) is also supported.
 
 ```bash
 idmhound -dc <SERVER> -u <USERNAME> -p <PASSWORD> -d <REALM> --legacy
 ```
+
+`--legacy` splits the output into 7 separate JSON files (one per node/edge type — users, groups, domains, computers, etc.) instead of a single combined file. This is expected, since the legacy BloodHound format ingests each type separately.
 
 **Authentication**
 
@@ -57,6 +61,18 @@ Valid starting     Expires            Service principal
 ```bash
 idmhound -dc idm01.lab.lo -d lab.lo -k
 ```
+
+## Setting up BloodHound CE
+
+If you don't already have a BloodHound instance to ingest the collected JSON into, BloodHound CE can be stood up quickly via Docker:
+
+```bash
+curl -L https://ghst.ly/getbhce -o docker-compose.yml
+BLOODHOUND_HOST=<bind-ip> BLOODHOUND_PORT=<port> docker compose -f docker-compose.yml up
+```
+
+* The default login is `admin`, with the password printed in the `bloodhound` container's startup logs (look for a line like `Initial Password Set To: ...`).
+* Running `docker compose` without `sudo` requires your user to be in the `docker` group (`sudo usermod -aG docker $USER`, then start a new shell or run `newgrp docker`).
 
 ## Example Cypher queries
 
