@@ -16,6 +16,12 @@ cd idmhound
 pip install .
 ```
 
+Alternatively, on a fresh box (e.g. a Kali VM), `patch_and_install.sh` installs the required system deps (`pipx`, `libkrb5-dev`, `gcc`, `python3-dev`) and installs idmhound via `pipx`:
+
+```bash
+./patch_and_install.sh
+```
+
 ## Usage
 
 **Output format**
